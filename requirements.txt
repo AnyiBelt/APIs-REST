@@ -1,0 +1,7 @@
+#Jupyter Notebook & Kernel
+ipykernel
+Notebook
+requests
+
+#Flask
+flask 
