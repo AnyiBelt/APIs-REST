@@ -7,7 +7,7 @@ app = Flask(__name__)
 SPOTIFY_CLIENT_ID = "c8399ac35efd438db08d7f313436506c"
 SPOTIFY_CLIENT_SECRET = "c64889d2ed9a4682ad9df24c86353bf6"
 
-# Global var for users at the beginning we don't have anyone
+# Variable global de usuarios que no esta iniciañizada he iremos llenando con el metodo post
 USER = []
 
 # Funciones axuliares de spotify api
@@ -33,6 +33,64 @@ def buscar_cancion(nombre):
     
     respuesta= requests.get(url, headers=headers)
     return respuesta.json(), respuesta.status_code
+
+@app.route("/users/<int:user_id>/cancion", methods=["POST"])
+def agregar_cancion_favorita(user_id):
+    global USER
+    
+    #leer el JSON que nos envia postman
+    datos=request.get_json()
+    nombre_cancion=datos.get("cancion") if datos else None
+    
+    if not nombre_cancion:
+        return{
+            "message":"Debes proporcionar el nombre de la canción en el JSON"
+            },400
+    
+    #Buscar la cancion en Spotify
+    token = obtener_token_spotify()
+    if not token: 
+        return { 
+                "message":"No se pudo conectar con Spotify"
+                }, 500
+    url_spotify=f"https://api.spotify.com/v1/search?q={nombre_cancion}&type=track&limit=1"
+    headers={'Authorization':f"Bearer {token}"}
+    respuesta_spotify= requests.get(url_spotify, headers=headers)
+    
+    if respuesta_spotify.status_code !=200:
+        return { 
+                "message":"Error al consultar la API de Spotify"
+                },500
+    
+    items= respuesta_spotify.json().get("tracks",{}).get("items",[])
+    if not items:
+        return {
+            "message":f"no se encontro nombre de la cancion '{nombre_cancion} en spotify'"
+        }, 400
+    
+    #Extraemos solo los datos limpios que nos interesan de Spotify
+    track=items[0]
+    cancion_info={
+        "nombre": track["name"],
+        "artista": track["artists"][0]["name"],
+        "album": track["album"]["name"],
+        "link_spotify":track["external_urls"]["spotify"]
+    }
+    
+    #buscar el usuario por ID en nuestra lista de usuarios
+    for user in USER:
+        if user['id'] == user_id:
+            #Si el usuario no tiene un espacio en su array para canciones se lo agregamos como una lista vacia
+            if "canciones_favoritas" not in user:
+                user["canciones_favoritas"] = []
+            
+            #agregamos la cancion a la lista del usuario
+            user["canciones_favoritas"].append(cancion_info)
+            
+            return{
+                "message": f"se ha agregado la cancion: '{nombre_cancion}' con exito al usuario: '{user['nombre']}'"
+            }, 200
+    return {"message":"usuario no encuentrado"},400
 
 
 #Route to get users and sent the users
