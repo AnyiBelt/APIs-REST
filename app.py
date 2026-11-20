@@ -11,6 +11,7 @@ SPOTIFY_CLIENT_SECRET = "c64889d2ed9a4682ad9df24c86353bf6"
 USER = []
 
 # Funciones axuliares de spotify api
+
 def obtener_token_spotify():
     url="https://accounts.spotify.com/api/token"
     auth=(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
@@ -34,7 +35,35 @@ def buscar_cancion(nombre):
     respuesta= requests.get(url, headers=headers)
     return respuesta.json(), respuesta.status_code
 
-@app.route("/users/<int:user_id>/cancion", methods=["POST"])
+#Ruta para saber si hay usuarios en la base de datos
+@app.route("/users" , methods=["GET"])
+def obtener_usuarios():
+    
+    #check how many users are in the list
+    cantidad_usuarios=len(USER)
+    
+    if cantidad_usuarios == 0:
+        return{'message':'No hay usuarios en la base de datos'}, 400
+    return{"users": USER}, 200
+
+#Ruta para agregar usuarios
+@app.route("/adduser",methods=["POST"])
+def add_user():
+    global USER
+    
+    new_users=request.get_json().get("users",[])
+    for new_user in new_users:
+        if 'id' not in new_user or 'nombre' not in new_user:
+            return{'message':'datos del usuario invalidos'},400
+        if any (user ["id"] == new_user['id'] for user in USER):
+            return{ 'message': f'Usuario con ID {new_user["id"]} ya existe'}, 409
+        
+    USER.extend(new_users)
+    
+    return { 'message':'Usuario agregado correctamente',
+            'nombres de los usuarios':[user["nombre"] for user in new_users]}, 201
+
+@app.route("/users/<int:user_id>/canciones", methods=["POST"])
 def agregar_cancion_favorita(user_id):
     global USER
     
@@ -46,6 +75,15 @@ def agregar_cancion_favorita(user_id):
         return{
             "message":"Debes proporcionar el nombre de la canción en el JSON"
             },400
+    
+    #verificamos si hay usuarios en el array para agregar canciones
+    usuario_encontrado=None
+    for user in USER:
+        if user["id"]==user_id:
+            usuario_encontrado=user
+            break;
+    if not usuario_encontrado:
+        return{ "message": f"el usuario con id {user_id} no existe en la base de datos"}, 400
     
     #Buscar la cancion en Spotify
     token = obtener_token_spotify()
@@ -67,6 +105,7 @@ def agregar_cancion_favorita(user_id):
         return {
             "message":f"no se encontro nombre de la cancion '{nombre_cancion} en spotify'"
         }, 400
+
     
     #Extraemos solo los datos limpios que nos interesan de Spotify
     track=items[0]
@@ -90,35 +129,7 @@ def agregar_cancion_favorita(user_id):
             return{
                 "message": f"se ha agregado la cancion: '{nombre_cancion}' con exito al usuario: '{user['nombre']}'"
             }, 200
-    return {"message":"usuario no encuentrado"},400
-
-
-#Route to get users and sent the users
-@app.route("/users" , methods=["GET"])
-def obtener_usuarios():
-    
-    #check how many users are in the list
-    cantidad_usuarios=len(USER)
-    
-    if cantidad_usuarios == 0:
-        return{'mesage':'No hay usuarios en la base de datos'}, 400
-    return{"users": USER}, 200
-
-@app.route("/adduser",methods=["POST"])
-def add_user():
-    global USERS
-    
-    new_users=request.get_json().get("users",[])
-    for new_user in new_users:
-        if 'id' not in new_user or 'nombre' not in new_user:
-            return{'mesage':'datos del usuario invalidos'},400
-        if any (user ["id"] == new_user['id'] for user in USER):
-            return{ 'mesage': f'Usuario con ID {new_user["id"]} ya existe'}, 409
-        
-    USER.extend(new_users)
-    
-    return { 'message':'Usuario agregado correctamente',
-            'nombres de los usuarios':[user["nombre"] for user in new_users]}        
+    return {"message":"usuario no encontrado"},400
     
 @app.route("/deleteusers" , methods=["DELETE"])
 def delete_user():
