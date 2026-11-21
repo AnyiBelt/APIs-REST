@@ -1,39 +1,10 @@
-import requests
 from flask import Flask, request
+from spotify_service import buscar_cancion
 
 app = Flask(__name__)
 
-# Llamamos el cliente de spotify
-SPOTIFY_CLIENT_ID = "c8399ac35efd438db08d7f313436506c"
-SPOTIFY_CLIENT_SECRET = "c64889d2ed9a4682ad9df24c86353bf6"
-
 # Variable global de usuarios que no esta iniciañizada he iremos llenando con el metodo post
 USER = []
-
-# Funciones axuliares de spotify api
-
-def obtener_token_spotify():
-    url="https://accounts.spotify.com/api/token"
-    auth=(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
-    data={"grant_type":"client_credentials"}
-    
-    respuesta=requests.post(url,auth=auth,data=data)
-    if respuesta.status_code == 200:
-        return respuesta.json().get("access_token")
-    return None
-
-@app.route("/buscar-cancion/<nombre>",methods=["GET"])
-def buscar_cancion(nombre):
-    """Busca cancion en la api real de spotify"""
-    token=obtener_token_spotify()
-    if not token:
-        return{"message":"No se pudo obtener token de Spotify"},500
-    
-    url=f"https://api.spotify.com/v1/search?q={nombre}&type=track&limit=1"
-    headers={'Authorization':f"Bearer {token}"}
-    
-    respuesta= requests.get(url, headers=headers)
-    return respuesta.json(), respuesta.status_code
 
 #Ruta para saber si hay usuarios en la base de datos
 @app.route("/users" , methods=["GET"])
@@ -81,55 +52,26 @@ def agregar_cancion_favorita(user_id):
     for user in USER:
         if user["id"]==user_id:
             usuario_encontrado=user
-            break;
+            break
     if not usuario_encontrado:
-        return{ "message": f"el usuario con id {user_id} no existe en la base de datos"}, 400
+        return{ "message": f"el usuario con id {user_id} no existe en la base de datos"}, 404
     
     #Buscar la cancion en Spotify
-    token = obtener_token_spotify()
-    if not token: 
-        return { 
-                "message":"No se pudo conectar con Spotify"
-                }, 500
-    url_spotify=f"https://api.spotify.com/v1/search?q={nombre_cancion}&type=track&limit=1"
-    headers={'Authorization':f"Bearer {token}"}
-    respuesta_spotify= requests.get(url_spotify, headers=headers)
-    
-    if respuesta_spotify.status_code !=200:
-        return { 
-                "message":"Error al consultar la API de Spotify"
-                },500
-    
-    items= respuesta_spotify.json().get("tracks",{}).get("items",[])
-    if not items:
-        return {
-            "message":f"no se encontro nombre de la cancion '{nombre_cancion} en spotify'"
-        }, 400
+    cancion_info, error = buscar_cancion(nombre_cancion)
+    if error:
+        return{"message":error},404
 
-    
-    #Extraemos solo los datos limpios que nos interesan de Spotify
-    track=items[0]
-    cancion_info={
-        "nombre": track["name"],
-        "artista": track["artists"][0]["name"],
-        "album": track["album"]["name"],
-        "link_spotify":track["external_urls"]["spotify"]
-    }
-    
     #buscar el usuario por ID en nuestra lista de usuarios
-    for user in USER:
-        if user['id'] == user_id:
-            #Si el usuario no tiene un espacio en su array para canciones se lo agregamos como una lista vacia
-            if "canciones_favoritas" not in user:
-                user["canciones_favoritas"] = []
+    if "canciones_favoritas" not in usuario_encontrado:
+        #agregamos la cancion a la lista del usuario
+        usuario_encontrado["canciones_favoritas"]=[]
+        
+    usuario_encontrado["canciones_favoritas"].append(cancion_info)
             
-            #agregamos la cancion a la lista del usuario
-            user["canciones_favoritas"].append(cancion_info)
-            
-            return{
-                "message": f"se ha agregado la cancion: '{nombre_cancion}' con exito al usuario: '{user['nombre']}'"
-            }, 200
-    return {"message":"usuario no encontrado"},400
+    return{
+        "message": f"se ha agregado la cancion: '{nombre_cancion}' con exito al usuario: '{usuario_encontrado['nombre']}'",
+        "user":usuario_encontrado
+    }, 200
     
 @app.route("/deleteusers" , methods=["DELETE"])
 def delete_user():
