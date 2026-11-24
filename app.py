@@ -77,6 +77,14 @@ def agregar_cancion_favorita(user_id):
     if "canciones_favoritas" not in usuario_encontrado:
         usuario_encontrado["canciones_favoritas"]=[]
         
+    #Verificar si la canción Ya existe dentro de los favoritos del usuario 
+    cancion_existente = any(
+        c["nombre"].lower() == cancion_info["nombre"].lower()
+        for c in usuario_encontrado["canciones_favoritas"] )
+    
+    if cancion_existente: 
+        return {"message": f"La canción '{cancion_info['nombre']}' ya está en tus favoritos"}, 400
+    
     #se agrega cancion al usuario
     usuario_encontrado["canciones_favoritas"].append(cancion_info)
             
