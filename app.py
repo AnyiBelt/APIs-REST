@@ -3,16 +3,17 @@ from spotify_service import buscar_cancion
 
 app = Flask(__name__)
 
-# Variable global de usuarios que no esta iniciañizada he iremos llenando con el metodo post
+# Variable global de usuarios que no esta inicializada he iremos llenando con el metodo post
 USER = []
 
 #Ruta para saber si hay usuarios en la base de datos
 @app.route("/users" , methods=["GET"])
 def obtener_usuarios():
     
-    #check how many users are in the list
+    #Chequea cuantos usuarios hay dentro de l array USER
     cantidad_usuarios=len(USER)
     
+    #Si no hay usuarios devuelve error y si si hay devuelve array USER
     if cantidad_usuarios == 0:
         return{'message':'No hay usuarios en la base de datos'}, 400
     return{"users": USER}, 200
@@ -22,26 +23,34 @@ def obtener_usuarios():
 def add_user():
     global USER
     
+    #Obtiene el usuario del metodo POST
     new_users=request.get_json().get("users",[])
+    
+    # se recorre el array de usuarios
     for new_user in new_users:
+        # confirma si las claves id y el nombre fueron agradas si no envia error
         if 'id' not in new_user or 'nombre' not in new_user:
             return{'message':'datos del usuario invalidos'},400
+        #si no fue encontrado dentro de los usuarios envia error
         if any (user ["id"] == new_user['id'] for user in USER):
             return{ 'message': f'Usuario con ID {new_user["id"]} ya existe'}, 409
-        
+    
+    #Si se pasa la validación se agrega al usuario     
     USER.extend(new_users)
     
     return { 'message':'Usuario agregado correctamente',
             'nombres de los usuarios':[user["nombre"] for user in new_users]}, 201
 
+#Ruta para agregar cancion al usuario
 @app.route("/users/<int:user_id>/canciones", methods=["POST"])
 def agregar_cancion_favorita(user_id):
     global USER
     
-    #leer el JSON que nos envia postman
+    #Se obtienen los datos del post
     datos=request.get_json()
     nombre_cancion=datos.get("cancion") if datos else None
     
+    #si no se envia nombre responde con un codigo de error
     if not nombre_cancion:
         return{
             "message":"Debes proporcionar el nombre de la canción en el JSON"
@@ -50,33 +59,37 @@ def agregar_cancion_favorita(user_id):
     #verificamos si hay usuarios en el array para agregar canciones
     usuario_encontrado=None
     for user in USER:
+        #Se verifica si el id del usuario existe
         if user["id"]==user_id:
             usuario_encontrado=user
             break
+    #si no encuentra el usuario responde con un error
     if not usuario_encontrado:
         return{ "message": f"el usuario con id {user_id} no existe en la base de datos"}, 404
     
     #Buscar la cancion en Spotify
     cancion_info, error = buscar_cancion(nombre_cancion)
     if error:
-        return{"message":error},404
+        if "token" in error or "API" in error: return {"message": error}, 500
+        return {"message": error}, 404
 
-    #buscar el usuario por ID en nuestra lista de usuarios
+    #Si el usuario aún no tiene la lista 'canciones\_favoritas', se la creamos vacía
     if "canciones_favoritas" not in usuario_encontrado:
-        #agregamos la cancion a la lista del usuario
         usuario_encontrado["canciones_favoritas"]=[]
         
+    #se agrega cancion al usuario
     usuario_encontrado["canciones_favoritas"].append(cancion_info)
             
     return{
         "message": f"se ha agregado la cancion: '{nombre_cancion}' con exito al usuario: '{usuario_encontrado['nombre']}'",
         "user":usuario_encontrado
     }, 200
-    
+
+#Ruta para eliminar usuario
 @app.route("/deleteusers" , methods=["DELETE"])
 def delete_user():
     global USER
-    # extraer datos enviado al json
+    # obtener informacion por el metodo
     datos=request.get_json()
     user_id= datos.get("id") if datos else None
     
@@ -94,6 +107,7 @@ def delete_user():
             }, 200
     return {'message': f'No se encontró ningun usuario con el ID {user_id}'},400
 
+#Ruta para agregar información al usuario
 @app.route("/users/<int:id>" , methods=["PUT"])
 def update_user(id):
     global USER
